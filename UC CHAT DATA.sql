@@ -1,24 +1,38 @@
-CREATE DATABASE uc_chat;
+CREATE DATABASE IF NOT EXISTS uc_chat;
 
 USE uc_chat;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
     full_name VARCHAR(120) NOT NULL,
+
     email VARCHAR(190) NOT NULL UNIQUE,
+
     password_hash VARCHAR(255) NOT NULL,
-    profile_picture VARCHAR(500),
+
+    profile_picture VARCHAR(500) NULL,
+
+    is_online TINYINT(1) NOT NULL DEFAULT 0,
+
     last_seen DATETIME NULL,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE contacts (
+CREATE TABLE IF NOT EXISTS contacts (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
     user_id INT UNSIGNED NOT NULL,
+
     contact_user_id INT UNSIGNED NOT NULL,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE KEY unique_contact (user_id, contact_user_id),
+    UNIQUE KEY unique_contact (
+        user_id,
+        contact_user_id
+    ),
 
     FOREIGN KEY (user_id)
         REFERENCES users(id)
@@ -29,13 +43,17 @@ CREATE TABLE contacts (
         ON DELETE CASCADE
 );
 
-CREATE TABLE conversations (
+CREATE TABLE IF NOT EXISTS conversations (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
     user_one_id INT UNSIGNED NOT NULL,
+
     user_two_id INT UNSIGNED NOT NULL,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ON UPDATE CURRENT_TIMESTAMP,
 
     UNIQUE KEY unique_conversation (
         user_one_id,
@@ -51,7 +69,7 @@ CREATE TABLE conversations (
         ON DELETE CASCADE
 );
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
     conversation_id BIGINT UNSIGNED NOT NULL,
@@ -84,20 +102,10 @@ CREATE TABLE messages (
     )
 );
 
-ALTER TABLE conversations
-ADD COLUMN updated_at TIMESTAMP
-DEFAULT CURRENT_TIMESTAMP
-ON UPDATE CURRENT_TIMESTAMP;
-
-ALTER TABLE users
-ADD COLUMN is_online TINYINT(1) NOT NULL DEFAULT 0;
-ALTER TABLE users
-ADD COLUMN last_seen DATETIME NULL;
-DESCRIBE conversations;
-SELECT id, full_name, email
-FROM users;
 SHOW TABLES;
-SHOW VARIABLES LIKE 'port';
-SELECT DATABASE();
+
 DESCRIBE users;
-SELECT * FROM messages;
+
+DESCRIBE conversations;
+
+DESCRIBE messages;

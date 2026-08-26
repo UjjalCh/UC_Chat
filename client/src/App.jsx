@@ -68,32 +68,18 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const [user, setUser] =
-    useState(null);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  const [authLoading, setAuthLoading] =
-    useState(true);
+  const [authMode, setAuthMode] = useState("signin");
 
-  const [authMode, setAuthMode] =
-    useState("signin");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [fullName, setFullName] =
-    useState("");
-
-  const [email, setEmail] =
-    useState("");
-
-  const [password, setPassword] =
-    useState("");
-
-  const [authError, setAuthError] =
-    useState("");
-
-  const [authMessage, setAuthMessage] =
-    useState("");
-
-  const [authSubmitting, setAuthSubmitting] =
-    useState(false);
+  const [authError, setAuthError] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -101,36 +87,26 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const [users, setUsers] =
-    useState([]);
-
-  const [conversations, setConversations] =
-    useState([]);
+  const [users, setUsers] = useState([]);
+  const [conversations, setConversations] = useState([]);
 
   const [
     selectedConversation,
     setSelectedConversation,
   ] = useState(null);
 
-  const [messages, setMessages] =
-    useState([]);
+  const [messages, setMessages] = useState([]);
+  const [messageText, setMessageText] = useState("");
 
-  const [messageText, setMessageText] =
-    useState("");
-
-  const [loadingUsers, setLoadingUsers] =
-    useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [
     loadingConversations,
     setLoadingConversations,
   ] = useState(false);
 
-  const [loadingMessages, setLoadingMessages] =
-    useState(false);
-
-  const [sending, setSending] =
-    useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -138,14 +114,9 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const [searchText, setSearchText] =
-    useState("");
-
-  const [searchResults, setSearchResults] =
-    useState([]);
-
-  const [searching, setSearching] =
-    useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
   /*
   |--------------------------------------------------------------------------
@@ -153,14 +124,9 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const [mobileSidebar, setMobileSidebar] =
-    useState(true);
-
-  const [showProfile, setShowProfile] =
-    useState(false);
-
-  const [typingUser, setTypingUser] =
-    useState(null);
+  const [mobileSidebar, setMobileSidebar] = useState(true);
+  const [showProfile, setShowProfile] = useState(false);
+  const [typingUser, setTypingUser] = useState(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -168,14 +134,9 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const socketRef =
-    useRef(null);
-
-  const messagesEndRef =
-    useRef(null);
-
-  const typingTimeoutRef =
-    useRef(null);
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -187,30 +148,24 @@ function App() {
     checkAuth();
   }, []);
 
-  const checkAuth =
-    async () => {
-      try {
-        const response =
-          await api.get(
-            "/api/auth/me"
-          );
+  const checkAuth = async () => {
+    try {
+      const response = await api.get("/api/auth/me");
 
-        if (
-          response.data?.ok &&
-          response.data?.user
-        ) {
-          setUser(
-            response.data.user
-          );
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
+      if (
+        response.data?.ok &&
+        response.data?.user
+      ) {
+        setUser(response.data.user);
+      } else {
         setUser(null);
-      } finally {
-        setAuthLoading(false);
       }
-    };
+    } catch (error) {
+      setUser(null);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -240,73 +195,66 @@ function App() {
 
     let heartbeatTimer;
 
-    const setOnline =
-      async () => {
-        try {
-          await api.post(
-            "/api/users/status",
-            {
-              is_online: true,
-            }
-          );
-        } catch (error) {
-          console.error(
-            "Online status error:",
-            error
-          );
-        }
-      };
+    const setOnline = async () => {
+      try {
+        await api.post(
+          "/api/users/status",
+          {
+            is_online: true,
+          }
+        );
+      } catch (error) {
+        console.error(
+          "Online status error:",
+          error
+        );
+      }
+    };
 
-    const heartbeat =
-      async () => {
-        try {
-          await api.post(
-            "/api/users/heartbeat"
-          );
-        } catch (error) {
-          console.error(
-            "Heartbeat error:",
-            error
-          );
-        }
-      };
+    const heartbeat = async () => {
+      try {
+        await api.post(
+          "/api/users/heartbeat"
+        );
+      } catch (error) {
+        console.error(
+          "Heartbeat error:",
+          error
+        );
+      }
+    };
 
-    const setOffline =
-      () => {
-        try {
-          const data =
-            JSON.stringify({
-              is_online: false,
-            });
+    const setOffline = () => {
+      try {
+        const data = JSON.stringify({
+          is_online: false,
+        });
 
-          const blob =
-            new Blob(
-              [data],
-              {
-                type:
-                  "application/json",
-              }
-            );
+        const blob = new Blob(
+          [data],
+          {
+            type: "application/json",
+          }
+        );
 
-          navigator.sendBeacon(
-            `${API_URL}/api/users/status`,
-            blob
-          );
-        } catch (error) {
-          console.error(
-            "Offline status error:",
-            error
-          );
-        }
-      };
+        navigator.sendBeacon(
+          `${API_URL}/api/users/status`,
+          blob
+        );
+      } catch (error) {
+        console.error(
+          "Offline status error:",
+          error
+        );
+      }
+    };
 
     setOnline();
 
-    heartbeatTimer =
-      setInterval(
-        heartbeat,
-        30000
-      );
+    heartbeatTimer = setInterval(
+      heartbeat,
+      30000
+    );
 
     window.addEventListener(
       "beforeunload",
@@ -319,9 +267,7 @@ function App() {
     );
 
     return () => {
-      clearInterval(
-        heartbeatTimer
-      );
+      clearInterval(heartbeatTimer);
 
       window.removeEventListener(
         "beforeunload",
@@ -346,8 +292,9 @@ function App() {
       return;
     }
 
-    const socket =
-      io(SOCKET_URL, {
+    const socket = io(
+      SOCKET_URL,
+      {
         withCredentials: true,
 
         transports: [
@@ -356,14 +303,12 @@ function App() {
         ],
 
         reconnection: true,
-
         reconnectionAttempts: 10,
-
         reconnectionDelay: 1000,
-      });
+      }
+    );
 
-    socketRef.current =
-      socket;
+    socketRef.current = socket;
 
     /*
     |--------------------------------------------------------------------------
@@ -415,48 +360,38 @@ function App() {
     socket.on(
       "user_status_changed",
       (data) => {
-        if (
-          !data?.user_id
-        ) {
+        if (!data?.user_id) {
           return;
         }
 
-        const userId =
-          Number(
-            data.user_id
-          );
+        const userId = Number(
+          data.user_id
+        );
 
-        const online =
-          data.is_online
-            ? 1
-            : 0;
+        const online = data.is_online
+          ? 1
+          : 0;
 
-        const updatePerson =
-          (person) =>
-            Number(
-              person.id
-            ) === userId
-              ? {
-                  ...person,
-                  is_online:
-                    online,
-                  last_seen:
-                    data.last_seen,
-                }
-              : person;
+        const updatePerson = (
+          person
+        ) =>
+          Number(person.id) === userId
+            ? {
+                ...person,
+                is_online: online,
+                last_seen:
+                  data.last_seen,
+              }
+            : person;
 
         setUsers(
           (previous) =>
-            previous.map(
-              updatePerson
-            )
+            previous.map(updatePerson)
         );
 
         setSearchResults(
           (previous) =>
-            previous.map(
-              updatePerson
-            )
+            previous.map(updatePerson)
         );
 
         setConversations(
@@ -468,8 +403,7 @@ function App() {
                 ) === userId
                   ? {
                       ...conversation,
-                      is_online:
-                        online,
+                      is_online: online,
                       last_seen:
                         data.last_seen,
                     }
@@ -490,8 +424,7 @@ function App() {
 
             return {
               ...previous,
-              is_online:
-                online,
+              is_online: online,
               last_seen:
                 data.last_seen,
             };
@@ -509,9 +442,7 @@ function App() {
     socket.on(
       "new_message",
       (newMessage) => {
-        if (
-          !newMessage?.id
-        ) {
+        if (!newMessage?.id) {
           return;
         }
 
@@ -620,16 +551,10 @@ function App() {
       (data) => {
         if (
           data?.user_id &&
-          Number(
-            data.user_id
-          ) !==
-            Number(
-              user.id
-            )
+          Number(data.user_id) !==
+            Number(user.id)
         ) {
-          setTypingUser(
-            data
-          );
+          setTypingUser(data);
         }
       }
     );
@@ -645,16 +570,12 @@ function App() {
       (data) => {
         if (
           !data?.user_id ||
-          Number(
-            data.user_id
-          ) ===
+          Number(data.user_id) ===
             Number(
               typingUser?.user_id
             )
         ) {
-          setTypingUser(
-            null
-          );
+          setTypingUser(null);
         }
       }
     );
@@ -679,8 +600,7 @@ function App() {
       socket.removeAllListeners();
       socket.disconnect();
 
-      socketRef.current =
-        null;
+      socketRef.current = null;
     };
   }, [user]);
 
@@ -690,37 +610,28 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const loadUsers =
-    async () => {
-      try {
-        setLoadingUsers(
-          true
-        );
+  const loadUsers = async () => {
+    try {
+      setLoadingUsers(true);
 
-        const response =
-          await api.get(
-            "/api/users"
-          );
+      const response = await api.get(
+        "/api/users"
+      );
 
-        if (
-          response.data?.ok
-        ) {
-          setUsers(
-            response.data.users ||
-              []
-          );
-        }
-      } catch (error) {
-        console.error(
-          "Users error:",
-          error
-        );
-      } finally {
-        setLoadingUsers(
-          false
+      if (response.data?.ok) {
+        setUsers(
+          response.data.users || []
         );
       }
-    };
+    } catch (error) {
+      console.error(
+        "Users error:",
+        error
+      );
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -740,12 +651,10 @@ function App() {
             "/api/chat/conversations"
           );
 
-        if (
-          response.data?.ok
-        ) {
+        if (response.data?.ok) {
           setConversations(
-            response.data.conversations ||
-              []
+            response.data
+              .conversations || []
           );
         }
       } catch (error) {
@@ -775,24 +684,22 @@ function App() {
       return;
     }
 
-    const timer =
-      setTimeout(() => {
+    const timer = setTimeout(
+      () => {
         searchUsers(query);
-      }, 350);
+      },
+      350
+    );
 
     return () => {
-      clearTimeout(
-        timer
-      );
+      clearTimeout(timer);
     };
   }, [searchText]);
 
   const searchUsers =
     async (query) => {
       try {
-        setSearching(
-          true
-        );
+        setSearching(true);
 
         const response =
           await api.get(
@@ -804,12 +711,9 @@ function App() {
             }
           );
 
-        if (
-          response.data?.ok
-        ) {
+        if (response.data?.ok) {
           setSearchResults(
-            response.data.users ||
-              []
+            response.data.users || []
           );
         }
       } catch (error) {
@@ -818,9 +722,7 @@ function App() {
           error
         );
       } finally {
-        setSearching(
-          false
-        );
+        setSearching(false);
       }
     };
 
@@ -833,22 +735,17 @@ function App() {
   const openConversation =
     async (person) => {
       try {
-        setLoadingMessages(
-          true
-        );
+        setLoadingMessages(true);
 
         const response =
           await api.post(
             "/api/chat/conversations",
             {
-              user_id:
-                person.id,
+              user_id: person.id,
             }
           );
 
-        if (
-          !response.data?.ok
-        ) {
+        if (!response.data?.ok) {
           throw new Error(
             response.data?.message ||
               "Unable to open conversation"
@@ -859,14 +756,9 @@ function App() {
           ...response.data
             .conversation,
 
-          user_id:
-            person.id,
-
-          full_name:
-            person.full_name,
-
-          email:
-            person.email,
+          user_id: person.id,
+          full_name: person.full_name,
+          email: person.email,
 
           profile_picture:
             person.profile_picture,
@@ -915,9 +807,7 @@ function App() {
           error
         );
       } finally {
-        setLoadingMessages(
-          false
-        );
+        setLoadingMessages(false);
       }
     };
 
@@ -934,17 +824,9 @@ function App() {
           conversation
         );
 
-        setMobileSidebar(
-          false
-        );
-
-        setLoadingMessages(
-          true
-        );
-
-        setTypingUser(
-          null
-        );
+        setMobileSidebar(false);
+        setLoadingMessages(true);
+        setTypingUser(null);
 
         await loadMessages(
           conversation.id
@@ -968,9 +850,7 @@ function App() {
           error
         );
       } finally {
-        setLoadingMessages(
-          false
-        );
+        setLoadingMessages(false);
       }
     };
 
@@ -981,21 +861,16 @@ function App() {
   */
 
   const loadMessages =
-    async (
-      conversationId
-    ) => {
+    async (conversationId) => {
       try {
         const response =
           await api.get(
             `/api/chat/conversations/${conversationId}/messages`
           );
 
-        if (
-          response.data?.ok
-        ) {
+        if (response.data?.ok) {
           setMessages(
-            response.data.messages ||
-              []
+            response.data.messages || []
           );
 
           setTimeout(
@@ -1020,9 +895,7 @@ function App() {
   */
 
   const markAsRead =
-    async (
-      conversationId
-    ) => {
+    async (conversationId) => {
       try {
         await api.post(
           `/api/chat/conversations/${conversationId}/read`
@@ -1035,9 +908,7 @@ function App() {
                 Number(
                   message.sender_id
                 ) !==
-                Number(
-                  user?.id
-                )
+                Number(user?.id)
                   ? {
                       ...message,
                       is_read: 1,
@@ -1095,16 +966,12 @@ function App() {
             conversation_id:
               conversationId,
 
-            message:
-              text,
+            message: text,
 
-            message_type:
-              "text",
+            message_type: "text",
           },
           (response) => {
-            if (
-              response?.ok
-            ) {
+            if (response?.ok) {
               setMessageText("");
               stopTyping();
             } else {
@@ -1132,17 +999,12 @@ function App() {
           await api.post(
             `/api/chat/conversations/${conversationId}/messages`,
             {
-              message:
-                text,
-
-              message_type:
-                "text",
+              message: text,
+              message_type: "text",
             }
           );
 
-        if (
-          response.data?.ok
-        ) {
+        if (response.data?.ok) {
           const newMessage =
             response.data.message;
 
@@ -1195,9 +1057,7 @@ function App() {
       const value =
         event.target.value;
 
-      setMessageText(
-        value
-      );
+      setMessageText(value);
 
       if (
         !socketRef.current?.connected ||
@@ -1223,22 +1083,21 @@ function App() {
         }, 1200);
     };
 
-  const stopTyping =
-    () => {
-      clearTimeout(
-        typingTimeoutRef.current
-      );
+  const stopTyping = () => {
+    clearTimeout(
+      typingTimeoutRef.current
+    );
 
-      if (
-        socketRef.current?.connected &&
-        selectedConversation
-      ) {
-        socketRef.current.emit(
-          "stop_typing",
-          selectedConversation.id
-        );
-      }
-    };
+    if (
+      socketRef.current?.connected &&
+      selectedConversation
+    ) {
+      socketRef.current.emit(
+        "stop_typing",
+        selectedConversation.id
+      );
+    }
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -1246,37 +1105,33 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const logout =
-    async () => {
-      try {
-        await api.post(
-          "/api/auth/logout"
-        );
-      } catch (error) {
-        console.error(
-          "Logout error:",
-          error
-        );
-      }
+  const logout = async () => {
+    try {
+      await api.post(
+        "/api/auth/logout"
+      );
+    } catch (error) {
+      console.error(
+        "Logout error:",
+        error
+      );
+    }
 
-      if (
-        socketRef.current
-      ) {
-        socketRef.current.disconnect();
-        socketRef.current =
-          null;
-      }
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
 
-      setUser(null);
-      setSelectedConversation(null);
-      setMessages([]);
-      setConversations([]);
-      setUsers([]);
-      setSearchResults([]);
-      setSearchText("");
-      setTypingUser(null);
-      setShowProfile(false);
-    };
+    setUser(null);
+    setSelectedConversation(null);
+    setMessages([]);
+    setConversations([]);
+    setUsers([]);
+    setSearchResults([]);
+    setSearchText("");
+    setTypingUser(null);
+    setShowProfile(false);
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -1303,8 +1158,7 @@ function App() {
       }
 
       if (
-        authMode ===
-          "signup" &&
+        authMode === "signup" &&
         !fullName.trim()
       ) {
         setAuthError(
@@ -1315,19 +1169,15 @@ function App() {
       }
 
       try {
-        setAuthSubmitting(
-          true
-        );
+        setAuthSubmitting(true);
 
         const endpoint =
-          authMode ===
-          "signup"
+          authMode === "signup"
             ? "/api/auth/signup"
             : "/api/auth/signin";
 
         const body =
-          authMode ===
-          "signup"
+          authMode === "signup"
             ? {
                 full_name:
                   fullName.trim(),
@@ -1354,9 +1204,7 @@ function App() {
             body
           );
 
-        if (
-          !response.data?.ok
-        ) {
+        if (!response.data?.ok) {
           throw new Error(
             response.data?.message ||
               "Authentication failed."
@@ -1364,17 +1212,13 @@ function App() {
         }
 
         if (
-          authMode ===
-          "signup"
+          authMode === "signup"
         ) {
           setAuthMessage(
             "Account created successfully. Please sign in."
           );
 
-          setAuthMode(
-            "signin"
-          );
-
+          setAuthMode("signin");
           setPassword("");
         } else {
           setUser(
@@ -1394,9 +1238,7 @@ function App() {
             "Something went wrong."
         );
       } finally {
-        setAuthSubmitting(
-          false
-        );
+        setAuthSubmitting(false);
       }
     };
 
@@ -1406,15 +1248,13 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const scrollToBottom =
-    () => {
-      messagesEndRef.current?.scrollIntoView(
-        {
-          behavior:
-            "smooth",
-        }
-      );
-    };
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView(
+      {
+        behavior: "smooth",
+      }
+    );
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -1426,33 +1266,30 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const formatTime =
-    (date) => {
-      if (!date) {
-        return "";
+  const formatTime = (date) => {
+    if (!date) {
+      return "";
+    }
+
+    const parsed =
+      new Date(date);
+
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return "";
+    }
+
+    return parsed.toLocaleTimeString(
+      [],
+      {
+        hour: "2-digit",
+        minute: "2-digit",
       }
-
-      const parsed =
-        new Date(date);
-
-      if (
-        Number.isNaN(
-          parsed.getTime()
-        )
-      ) {
-        return "";
-      }
-
-      return parsed.toLocaleTimeString(
-        [],
-        {
-          hour:
-            "2-digit",
-          minute:
-            "2-digit",
-        }
-      );
-    };
+    );
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -1460,35 +1297,31 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const formatDate =
-    (date) => {
-      if (!date) {
-        return "";
+  const formatDate = (date) => {
+    if (!date) {
+      return "";
+    }
+
+    const parsed =
+      new Date(date);
+
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return "";
+    }
+
+    return parsed.toLocaleDateString(
+      [],
+      {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
       }
-
-      const parsed =
-        new Date(date);
-
-      if (
-        Number.isNaN(
-          parsed.getTime()
-        )
-      ) {
-        return "";
-      }
-
-      return parsed.toLocaleDateString(
-        [],
-        {
-          day:
-            "numeric",
-          month:
-            "short",
-          year:
-            "numeric",
-        }
-      );
-    };
+    );
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -1496,23 +1329,21 @@ function App() {
   |--------------------------------------------------------------------------
   */
 
-  const getInitials =
-    (name) => {
-      if (!name) {
-        return "U";
-      }
+  const getInitials = (name) => {
+    if (!name) {
+      return "U";
+    }
 
-      return name
-        .trim()
-        .split(/\s+/)
-        .map(
-          (part) =>
-            part[0]
-        )
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-    };
+    return name
+      .trim()
+      .split(/\s+/)
+      .map(
+        (part) => part[0]
+      )
+      .join("")
+      .slice(0, 2)
+      .toUpperCase();
+  };
 
   /*
   |--------------------------------------------------------------------------
@@ -1538,36 +1369,31 @@ function App() {
   */
 
   const displayedConversations =
-    useMemo(
-      () => {
-        return [...conversations].sort(
-          (a, b) => {
-            const dateA =
-              new Date(
-                a.updated_at ||
-                  a.created_at ||
-                  0
-              ).getTime();
+    useMemo(() => {
+      return [
+        ...conversations,
+      ].sort((a, b) => {
+        const dateA =
+          new Date(
+            a.updated_at ||
+              a.created_at ||
+              0
+          ).getTime();
 
-            const dateB =
-              new Date(
-                b.updated_at ||
-                  b.created_at ||
-                  0
-              ).getTime();
+        const dateB =
+          new Date(
+            b.updated_at ||
+              b.created_at ||
+              0
+          ).getTime();
 
-            return (
-              dateB - dateA
-            );
-          }
-        );
-      },
-      [conversations]
-    );
+        return dateB - dateA;
+      });
+    }, [conversations]);
 
   /*
   |--------------------------------------------------------------------------
-  | LOADING
+  | LOADING SCREEN
   |--------------------------------------------------------------------------
   */
 
@@ -1673,8 +1499,7 @@ function App() {
                       event
                     ) =>
                       setFullName(
-                        event
-                          .target
+                        event.target
                           .value
                       )
                     }
@@ -1691,15 +1516,12 @@ function App() {
                 <input
                   type="email"
                   placeholder="you@example.com"
-                  value={
-                    email
-                  }
+                  value={email}
                   onChange={(
                     event
                   ) =>
                     setEmail(
-                      event
-                        .target
+                      event.target
                         .value
                     )
                   }
@@ -1715,15 +1537,12 @@ function App() {
                 <input
                   type="password"
                   placeholder="Enter your password"
-                  value={
-                    password
-                  }
+                  value={password}
                   onChange={(
                     event
                   ) =>
                     setPassword(
-                      event
-                        .target
+                      event.target
                         .value
                     )
                   }
@@ -1815,6 +1634,7 @@ function App() {
 
   return (
     <div className="chat-app">
+
       {/* SIDEBAR */}
 
       <aside
@@ -1850,6 +1670,7 @@ function App() {
               )
             }
             title="Profile"
+            type="button"
           >
             <MoreVertical
               size={20}
@@ -1879,9 +1700,8 @@ function App() {
 
             <button
               className="logout-button"
-              onClick={
-                logout
-              }
+              onClick={logout}
+              type="button"
             >
               <LogOut
                 size={17}
@@ -1902,9 +1722,7 @@ function App() {
           <input
             type="text"
             placeholder="Search people..."
-            value={
-              searchText
-            }
+            value={searchText}
             onChange={(
               event
             ) =>
@@ -2150,9 +1968,7 @@ function App() {
 
           <button
             className="footer-icon"
-            onClick={
-              logout
-            }
+            onClick={logout}
             title="Logout"
             type="button"
           >

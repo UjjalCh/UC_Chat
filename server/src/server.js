@@ -5,8 +5,16 @@ import cookieParser from "cookie-parser";
 import http from "http";
 import jwt from "jsonwebtoken";
 import { Server } from "socket.io";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
-import pool from "./db.js";
+import pool, {
+  testDatabaseConnection,
+  closeDatabase,
+} from "./db.js";
+
 import authRouter from "./auth.js";
 import usersRouter from "./users.js";
 import chatRouter from "./chat.js";
@@ -16,39 +24,404 @@ dotenv.config();
 
 /*
 |--------------------------------------------------------------------------
-| APP CONFIGURATION
+| FILE PATH CONFIGURATION
+|--------------------------------------------------------------------------
+*/
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const uploadDirectory = path.join(
+  __dirname,
+  "../uploads"
+);
+
+if (!fs.existsSync(uploadDirectory)) {
+  fs.mkdirSync(uploadDirectory, {
+    recursive: true,
+  });
+}
+
+/*
+|--------------------------------------------------------------------------
+| APPLICATION CONFIGURATION
 |--------------------------------------------------------------------------
 */
 
 const app = express();
 
-const PORT = process.env.PORT || 5000;
+const httpServer = http.createServer(app);
+
+const PORT =
+  Number(process.env.PORT) || 5000;
 
 const CLIENT_URL =
   process.env.CLIENT_URL ||
   "http://localhost:5173";
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const SERVER_URL =
+  process.env.SERVER_URL ||
+  `http://localhost:${PORT}`;
+
+const JWT_SECRET =
+  process.env.JWT_SECRET;
 
 /*
 |--------------------------------------------------------------------------
-| VALIDATE ENVIRONMENT
+| ALLOWED FRONTEND ORIGINS
+|--------------------------------------------------------------------------
+*/
+
+const allowedOrigins = [
+  CLIENT_URL,
+
+  "http://localhost:5173",
+
+  "http://127.0.0.1:5173",
+
+  "https://uc-chat-wheat.vercel.app",
+].filter(Boolean);
+
+/*
+|--------------------------------------------------------------------------
+| ENVIRONMENT VALIDATION
 |--------------------------------------------------------------------------
 */
 
 if (!JWT_SECRET) {
   console.error(
-    "ERROR: JWT_SECRET is not configured in server/.env"
+    "ERROR: JWT_SECRET is not configured."
+  );
+}
+
+if (!process.env.DB_HOST) {
+  console.warn(
+    "WARNING: DB_HOST is not configured."
+  );
+}
+
+if (!process.env.DB_USER) {
+  console.warn(
+    "WARNING: DB_USER is not configured."
+  );
+}
+
+if (!process.env.DB_NAME) {
+  console.warn(
+    "WARNING: DB_NAME is not configured."
   );
 }
 
 /*
 |--------------------------------------------------------------------------
-| HTTP SERVER
+| CONFIGURATION LOG
 |--------------------------------------------------------------------------
 */
 
-const httpServer = http.createServer(app);
+console.log("");
+console.log(
+  "========================================"
+);
+console.log(
+  "           UC CHAT CONFIGURATION"
+);
+console.log(
+  "========================================"
+);
+
+console.log(
+  "NODE_ENV:",
+  process.env.NODE_ENV || "development"
+);
+
+console.log(
+  "PORT:",
+  PORT
+);
+
+console.log(
+  "CLIENT_URL:",
+  CLIENT_URL
+);
+
+console.log(
+  "SERVER_URL:",
+  SERVER_URL
+);
+
+console.log(
+  "Allowed origins:",
+  allowedOrigins
+);
+
+console.log(
+  "JWT_SECRET:",
+  JWT_SECRET
+    ? "CONFIGURED"
+    : "MISSING"
+);
+
+console.log(
+  "DB_HOST:",
+  process.env.DB_HOST || "MISSING"
+);
+
+console.log(
+  "DB_NAME:",
+  process.env.DB_NAME || "MISSING"
+);
+
+console.log(
+  "UPLOAD DIRECTORY:",
+  uploadDirectory
+);
+
+console.log(
+  "========================================"
+);
+
+console.log("");
+
+/*
+|--------------------------------------------------------------------------
+| CORS
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      /*
+      |----------------------------------------------------------------------
+      | Allow requests such as Postman/server-side requests that have
+      | no Origin header.
+      |----------------------------------------------------------------------
+      */
+
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (
+        allowedOrigins.includes(origin)
+      ) {
+        return callback(null, true);
+      }
+
+      console.error(
+        "CORS blocked origin:",
+        origin
+      );
+
+      return callback(
+        new Error(
+          "Not allowed by CORS"
+        )
+      );
+    },
+
+    credentials: true,
+
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
+
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+    ],
+  })
+);
+
+/*
+|--------------------------------------------------------------------------
+| BODY PARSERS
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  express.json({
+    limit: "20mb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "20mb",
+  })
+);
+
+/*
+|--------------------------------------------------------------------------
+| COOKIE PARSER
+|--------------------------------------------------------------------------
+*/
+
+app.use(cookieParser());
+
+/*
+|--------------------------------------------------------------------------
+| STATIC UPLOAD FILES
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  "/uploads",
+  express.static(uploadDirectory)
+);
+
+/*
+|--------------------------------------------------------------------------
+| REQUEST LOGGER
+|--------------------------------------------------------------------------
+*/
+
+app.use(
+  (req, res, next) => {
+    console.log(
+      `${new Date().toISOString()} ${req.method} ${req.originalUrl}`
+    );
+
+    next();
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| MULTER CONFIGURATION
+|--------------------------------------------------------------------------
+*/
+
+const allowedMimeTypes = [
+  /*
+  | Images
+  */
+
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+
+  /*
+  | Documents
+  */
+
+  "application/pdf",
+  "text/plain",
+
+  /*
+  | Archives
+  */
+
+  "application/zip",
+
+  /*
+  | Microsoft Word
+  */
+
+  "application/msword",
+
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+  /*
+  | Microsoft Excel
+  */
+
+  "application/vnd.ms-excel",
+
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+  /*
+  | Microsoft PowerPoint
+  */
+
+  "application/vnd.ms-powerpoint",
+
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+];
+
+const storage =
+  multer.diskStorage({
+    destination: (
+      req,
+      file,
+      cb
+    ) => {
+      cb(
+        null,
+        uploadDirectory
+      );
+    },
+
+    filename: (
+      req,
+      file,
+      cb
+    ) => {
+      const extension =
+        path.extname(
+          file.originalname
+        );
+
+      const baseName =
+        path
+          .basename(
+            file.originalname,
+            extension
+          )
+          .replace(
+            /[^a-zA-Z0-9-_]/g,
+            "_"
+          );
+
+      const uniqueName =
+        `${Date.now()}-${Math.round(
+          Math.random() * 1e9
+        )}-${baseName}${extension}`;
+
+      cb(
+        null,
+        uniqueName
+      );
+    },
+  });
+
+const upload =
+  multer({
+    storage,
+
+    limits: {
+      fileSize:
+        15 * 1024 * 1024,
+    },
+
+    fileFilter: (
+      req,
+      file,
+      cb
+    ) => {
+      if (
+        allowedMimeTypes.includes(
+          file.mimetype
+        )
+      ) {
+        cb(null, true);
+      } else {
+        cb(
+          new Error(
+            "This file type is not supported."
+          )
+        );
+      }
+    },
+  });
 
 /*
 |--------------------------------------------------------------------------
@@ -56,41 +429,31 @@ const httpServer = http.createServer(app);
 |--------------------------------------------------------------------------
 */
 
-const io = new Server(httpServer, {
-  cors: {
-    origin: CLIENT_URL,
-    credentials: true,
-    methods: ["GET", "POST"]
-  }
-});
+const io =
+  new Server(
+    httpServer,
+    {
+      cors: {
+        origin:
+          allowedOrigins,
 
-/*
-|--------------------------------------------------------------------------
-| MIDDLEWARE
-|--------------------------------------------------------------------------
-*/
+        credentials: true,
 
-app.use(
-  cors({
-    origin: CLIENT_URL,
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization"
-    ]
-  })
-);
+        methods: [
+          "GET",
+          "POST",
+        ],
+      },
 
-app.use(express.json());
+      transports: [
+        "websocket",
+        "polling",
+      ],
 
-app.use(
-  express.urlencoded({
-    extended: true
-  })
-);
-
-app.use(cookieParser());
+      maxHttpBufferSize:
+        2 * 1024 * 1024,
+    }
+  );
 
 /*
 |--------------------------------------------------------------------------
@@ -98,13 +461,38 @@ app.use(cookieParser());
 |--------------------------------------------------------------------------
 */
 
-app.get("/", (req, res) => {
-  res.json({
-    ok: true,
-    message: "UC Chat API is running",
-    version: "1.0.0"
-  });
-});
+app.get(
+  "/",
+  (req, res) => {
+    return res.json({
+      ok: true,
+
+      message:
+        "UC Chat API is running",
+
+      version:
+        "1.2.0",
+
+      environment:
+        process.env.NODE_ENV ||
+        "development",
+
+      features: {
+        authentication: true,
+        text_messages: true,
+        image_messages: true,
+        file_messages: true,
+        image_upload: true,
+        file_upload: true,
+        socket_io: true,
+        online_status: true,
+        last_seen: true,
+        typing_status: true,
+        conversations: true,
+      },
+    });
+  }
+);
 
 /*
 |--------------------------------------------------------------------------
@@ -152,7 +540,325 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| HEALTH CHECK
+| FILE UPLOAD
+| POST /api/chat/upload
+|--------------------------------------------------------------------------
+|
+| IMPORTANT:
+| This route is registered BEFORE the 404 handler.
+|--------------------------------------------------------------------------
+*/
+
+app.post(
+  "/api/chat/upload",
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      /*
+      |----------------------------------------------------------------------
+      | JWT CONFIGURATION
+      |----------------------------------------------------------------------
+      */
+
+      if (!JWT_SECRET) {
+        return res.status(500).json({
+          ok: false,
+          message:
+            "JWT_SECRET is not configured",
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | READ TOKEN COOKIE
+      |----------------------------------------------------------------------
+      */
+
+      const cookieHeader =
+        req.headers.cookie || "";
+
+      const tokenMatch =
+        cookieHeader.match(
+          /(?:^|;\s*)uc_chat_token=([^;]+)/
+        );
+
+      if (!tokenMatch) {
+        return res.status(401).json({
+          ok: false,
+          message:
+            "Not authenticated",
+        });
+      }
+
+      const token =
+        decodeURIComponent(
+          tokenMatch[1]
+        );
+
+      /*
+      |----------------------------------------------------------------------
+      | VERIFY TOKEN
+      |----------------------------------------------------------------------
+      */
+
+      const decoded =
+        jwt.verify(
+          token,
+          JWT_SECRET
+        );
+
+      if (
+        !decoded ||
+        !decoded.id
+      ) {
+        return res.status(401).json({
+          ok: false,
+          message:
+            "Invalid authentication token",
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | CHECK USER
+      |----------------------------------------------------------------------
+      */
+
+      const [users] =
+        await pool.query(
+          `
+          SELECT
+            id,
+            full_name,
+            email,
+            profile_picture
+
+          FROM users
+
+          WHERE id = ?
+
+          LIMIT 1
+          `,
+          [decoded.id]
+        );
+
+      if (
+        users.length === 0
+      ) {
+        return res.status(401).json({
+          ok: false,
+          message:
+            "User not found",
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | CHECK FILE
+      |----------------------------------------------------------------------
+      */
+
+      if (!req.file) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "No file selected",
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | DETERMINE MESSAGE TYPE
+      |----------------------------------------------------------------------
+      */
+
+      const isImage =
+        req.file.mimetype.startsWith(
+          "image/"
+        );
+
+      const messageType =
+        isImage
+          ? "image"
+          : "file";
+
+      /*
+      |----------------------------------------------------------------------
+      | CREATE FILE URL
+      |----------------------------------------------------------------------
+      */
+
+      const fileUrl =
+        `${SERVER_URL}/uploads/${encodeURIComponent(
+          req.file.filename
+        )}`;
+
+      /*
+      |----------------------------------------------------------------------
+      | RESPONSE
+      |----------------------------------------------------------------------
+      */
+
+      return res.status(201).json({
+        ok: true,
+
+        message:
+          "File uploaded successfully",
+
+        file: {
+          url: fileUrl,
+
+          filename:
+            req.file.filename,
+
+          original_name:
+            req.file.originalname,
+
+          mimetype:
+            req.file.mimetype,
+
+          size:
+            req.file.size,
+
+          message_type:
+            messageType,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "File upload error:",
+        error
+      );
+
+      /*
+      |----------------------------------------------------------------------
+      | DELETE PARTIALLY UPLOADED FILE
+      |----------------------------------------------------------------------
+      */
+
+      if (
+        req.file &&
+        req.file.path
+      ) {
+        try {
+          if (
+            fs.existsSync(
+              req.file.path
+            )
+          ) {
+            fs.unlinkSync(
+              req.file.path
+            );
+          }
+        } catch (
+          deleteError
+        ) {
+          console.error(
+            "Unable to remove uploaded file:",
+            deleteError
+          );
+        }
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | MULTER ERROR
+      |----------------------------------------------------------------------
+      */
+
+      if (
+        error instanceof
+        multer.MulterError
+      ) {
+        if (
+          error.code ===
+          "LIMIT_FILE_SIZE"
+        ) {
+          return res.status(413).json({
+            ok: false,
+            message:
+              "File is too large. Maximum size is 15MB.",
+          });
+        }
+
+        return res.status(400).json({
+          ok: false,
+          message:
+            error.message,
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | FILE TYPE ERROR
+      |----------------------------------------------------------------------
+      */
+
+      if (
+        error.message ===
+        "This file type is not supported."
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message:
+            "This file type is not supported.",
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | JWT ERROR
+      |----------------------------------------------------------------------
+      */
+
+      if (
+        error.name ===
+        "JsonWebTokenError"
+      ) {
+        return res.status(401).json({
+          ok: false,
+          message:
+            "Invalid authentication token",
+        });
+      }
+
+      if (
+        error.name ===
+        "TokenExpiredError"
+      ) {
+        return res.status(401).json({
+          ok: false,
+          message:
+            "Authentication token expired",
+        });
+      }
+
+      /*
+      |----------------------------------------------------------------------
+      | GENERAL ERROR
+      |----------------------------------------------------------------------
+      */
+
+      return res.status(500).json({
+        ok: false,
+
+        message:
+          "Unable to upload file",
+
+        error:
+          process.env.NODE_ENV ===
+          "production"
+            ? undefined
+            : error.message,
+      });
+    }
+  }
+);
+
+/*
+|--------------------------------------------------------------------------
+| DATABASE HEALTH CHECK
+| GET /api/health
 |--------------------------------------------------------------------------
 */
 
@@ -165,27 +871,40 @@ app.get(
           "SELECT 1 AS connected"
         );
 
-      res.json({
+      return res.json({
         ok: true,
+
         message:
           "UC Chat API is running",
+
         database:
-          rows[0].connected === 1,
+          Number(
+            rows[0]?.connected
+          ) === 1,
+
         timestamp:
-          new Date().toISOString()
+          new Date().toISOString(),
       });
     } catch (error) {
       console.error(
-        "Database error:",
+        "Database health error:",
         error
       );
 
-      res.status(500).json({
+      return res.status(500).json({
         ok: false,
+
         message:
           "Database connection failed",
-        error: error.message,
-        code: error.code
+
+        code:
+          error.code,
+
+        error:
+          process.env.NODE_ENV ===
+          "production"
+            ? undefined
+            : error.message,
       });
     }
   }
@@ -195,15 +914,13 @@ app.get(
 |--------------------------------------------------------------------------
 | SOCKET AUTHENTICATION
 |--------------------------------------------------------------------------
-|
-| Reads the JWT from the same cookie used by auth.js:
-|
-| uc_chat_token
-|
 */
 
 io.use(
-  async (socket, next) => {
+  async (
+    socket,
+    next
+  ) => {
     try {
       if (!JWT_SECRET) {
         return next(
@@ -213,16 +930,23 @@ io.use(
         );
       }
 
-      const cookieHeader =
-        socket.handshake.headers.cookie ||
-        "";
+      /*
+      |----------------------------------------------------------------------
+      | GET COOKIE
+      |----------------------------------------------------------------------
+      */
 
-      const match =
+      const cookieHeader =
+        socket.handshake
+          .headers
+          .cookie || "";
+
+      const tokenMatch =
         cookieHeader.match(
           /(?:^|;\s*)uc_chat_token=([^;]+)/
         );
 
-      if (!match) {
+      if (!tokenMatch) {
         console.error(
           "Socket authentication failed: token cookie not found"
         );
@@ -236,8 +960,14 @@ io.use(
 
       const token =
         decodeURIComponent(
-          match[1]
+          tokenMatch[1]
         );
+
+      /*
+      |----------------------------------------------------------------------
+      | VERIFY JWT
+      |----------------------------------------------------------------------
+      */
 
       const decoded =
         jwt.verify(
@@ -245,13 +975,22 @@ io.use(
           JWT_SECRET
         );
 
-      if (!decoded?.id) {
+      if (
+        !decoded ||
+        !decoded.id
+      ) {
         return next(
           new Error(
             "Invalid authentication token"
           )
         );
       }
+
+      /*
+      |----------------------------------------------------------------------
+      | CHECK USER
+      |----------------------------------------------------------------------
+      */
 
       const [users] =
         await pool.query(
@@ -273,7 +1012,9 @@ io.use(
           [decoded.id]
         );
 
-      if (users.length === 0) {
+      if (
+        users.length === 0
+      ) {
         return next(
           new Error(
             "User not found"
@@ -317,19 +1058,22 @@ io.on(
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | PERSONAL USER ROOM
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
+    const userRoom =
+      `user:${user.id}`;
+
     socket.join(
-      `user:${user.id}`
+      userRoom
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | MARK USER ONLINE
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     try {
@@ -356,29 +1100,36 @@ io.on(
     }
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | BROADCAST ONLINE STATUS
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     io.emit(
       "user_status_changed",
       {
-        user_id: user.id,
-        is_online: true,
-        last_seen: null
+        user_id:
+          user.id,
+
+        is_online:
+          true,
+
+        last_seen:
+          null,
       }
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | JOIN CONVERSATION
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     socket.on(
       "join_conversation",
-      async (conversationId) => {
+      async (
+        conversationId
+      ) => {
         try {
           const id =
             Number(
@@ -386,7 +1137,9 @@ io.on(
             );
 
           if (
-            !Number.isInteger(id) ||
+            !Number.isInteger(
+              id
+            ) ||
             id <= 0
           ) {
             return;
@@ -412,7 +1165,7 @@ io.on(
               [
                 id,
                 user.id,
-                user.id
+                user.id,
               ]
             );
 
@@ -443,21 +1196,25 @@ io.on(
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | LEAVE CONVERSATION
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     socket.on(
       "leave_conversation",
-      (conversationId) => {
+      (
+        conversationId
+      ) => {
         const id =
           Number(
             conversationId
           );
 
         if (
-          !Number.isInteger(id) ||
+          !Number.isInteger(
+            id
+          ) ||
           id <= 0
         ) {
           return;
@@ -474,9 +1231,9 @@ io.on(
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | SEND MESSAGE
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     socket.on(
@@ -497,13 +1254,15 @@ io.on(
             ).trim();
 
           const messageType =
-            data?.message_type ||
-            "text";
+            String(
+              data?.message_type ||
+                "text"
+            );
 
           /*
-          |----------------------------------------------------------------------
-          | VALIDATE CONVERSATION ID
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | VALIDATE CONVERSATION
+          |------------------------------------------------------------------
           */
 
           if (
@@ -518,9 +1277,9 @@ io.on(
           }
 
           /*
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
           | VALIDATE MESSAGE
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
           */
 
           if (!message) {
@@ -529,24 +1288,16 @@ io.on(
             );
           }
 
-          if (
-            message.length > 5000
-          ) {
-            throw new Error(
-              "Message is too long"
-            );
-          }
-
           /*
-          |----------------------------------------------------------------------
-          | VALIDATE MESSAGE TYPE
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | VALID MESSAGE TYPES
+          |------------------------------------------------------------------
           */
 
           const allowedTypes = [
             "text",
             "image",
-            "file"
+            "file",
           ];
 
           if (
@@ -560,13 +1311,52 @@ io.on(
           }
 
           /*
-          |----------------------------------------------------------------------
-          | VERIFY CONVERSATION ACCESS
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | TEXT LENGTH
+          |------------------------------------------------------------------
+          */
+
+          if (
+            messageType === "text" &&
+            message.length > 5000
+          ) {
+            throw new Error(
+              "Text message is too long"
+            );
+          }
+
+          /*
+          |------------------------------------------------------------------
+          | IMAGE / FILE URL
+          |------------------------------------------------------------------
+          */
+
+          if (
+            messageType === "image" ||
+            messageType === "file"
+          ) {
+            if (
+              !message.startsWith(
+                "http://"
+              ) &&
+              !message.startsWith(
+                "https://"
+              )
+            ) {
+              throw new Error(
+                "Invalid uploaded file URL"
+              );
+            }
+          }
+
+          /*
+          |------------------------------------------------------------------
+          | CHECK CONVERSATION ACCESS
+          |------------------------------------------------------------------
           */
 
           const [
-            conversation
+            conversations,
           ] =
             await pool.query(
               `
@@ -589,25 +1379,30 @@ io.on(
               [
                 conversationId,
                 user.id,
-                user.id
+                user.id,
               ]
             );
 
           if (
-            conversation.length === 0
+            conversations.length === 0
           ) {
             throw new Error(
               "Conversation not found"
             );
           }
 
+          const conversation =
+            conversations[0];
+
           /*
-          |----------------------------------------------------------------------
-          | SAVE MESSAGE
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | INSERT MESSAGE
+          |------------------------------------------------------------------
           */
 
-          const [result] =
+          const [
+            result,
+          ] =
             await pool.query(
               `
               INSERT INTO messages
@@ -615,26 +1410,48 @@ io.on(
                 conversation_id,
                 sender_id,
                 message,
-                message_type
+                message_type,
+                is_read
               )
 
-              VALUES (?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, FALSE)
               `,
               [
                 conversationId,
                 user.id,
                 message,
-                messageType
+                messageType,
               ]
             );
 
           /*
-          |----------------------------------------------------------------------
-          | GET SAVED MESSAGE
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | UPDATE CONVERSATION
+          |------------------------------------------------------------------
           */
 
-          const [messages] =
+          await pool.query(
+            `
+            UPDATE conversations
+
+            SET
+              updated_at =
+                CURRENT_TIMESTAMP
+
+            WHERE id = ?
+            `,
+            [conversationId]
+          );
+
+          /*
+          |------------------------------------------------------------------
+          | LOAD SAVED MESSAGE
+          |------------------------------------------------------------------
+          */
+
+          const [
+            messages,
+          ] =
             await pool.query(
               `
               SELECT
@@ -657,10 +1474,12 @@ io.on(
 
               FROM messages m
 
-              JOIN users u
-                ON u.id = m.sender_id
+              INNER JOIN users u
+                ON u.id =
+                  m.sender_id
 
-              WHERE m.id = ?
+              WHERE
+                m.id = ?
 
               LIMIT 1
               `,
@@ -679,62 +1498,68 @@ io.on(
             messages[0];
 
           /*
-          |----------------------------------------------------------------------
-          | SEND MESSAGE TO CONVERSATION
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | NORMALIZE is_read
+          |------------------------------------------------------------------
           */
 
-          io
-            .to(
-              `conversation:${conversationId}`
-            )
-            .emit(
-              "new_message",
-              savedMessage
-            );
+          savedMessage.is_read =
+            Number(
+              savedMessage.is_read
+            ) === 1
+              ? 1
+              : 0;
 
           /*
-          |----------------------------------------------------------------------
-          | FIND OTHER USER
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
+          | SEND TO CONVERSATION
+          |------------------------------------------------------------------
           */
 
-          const currentConversation =
-            conversation[0];
+          io.to(
+            `conversation:${conversationId}`
+          ).emit(
+            "new_message",
+            savedMessage
+          );
+
+          /*
+          |------------------------------------------------------------------
+          | FIND OTHER USER
+          |------------------------------------------------------------------
+          */
 
           const otherUserId =
             Number(
-              currentConversation.user_one_id
+              conversation.user_one_id
             ) ===
             Number(user.id)
-              ? currentConversation.user_two_id
-              : currentConversation.user_one_id;
+              ? conversation.user_two_id
+              : conversation.user_one_id;
 
           /*
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
           | NOTIFY OTHER USER
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
           */
 
-          io
-            .to(
-              `user:${otherUserId}`
-            )
-            .emit(
-              "conversation_updated",
-              {
-                conversation_id:
-                  conversationId,
+          io.to(
+            `user:${otherUserId}`
+          ).emit(
+            "conversation_updated",
+            {
+              conversation_id:
+                conversationId,
 
-                message:
-                  savedMessage
-              }
-            );
+              message:
+                savedMessage,
+            }
+          );
 
           /*
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
           | CALLBACK
-          |----------------------------------------------------------------------
+          |------------------------------------------------------------------
           */
 
           if (
@@ -743,10 +1568,15 @@ io.on(
           ) {
             callback({
               ok: true,
+
               message:
-                savedMessage
+                savedMessage,
             });
           }
+
+          console.log(
+            `Message sent: type=${messageType}, conversation=${conversationId}, user=${user.id}`
+          );
         } catch (error) {
           console.error(
             "Socket message error:",
@@ -759,9 +1589,10 @@ io.on(
           ) {
             callback({
               ok: false,
+
               message:
                 error.message ||
-                "Unable to send message"
+                "Unable to send message",
             });
           }
         }
@@ -769,14 +1600,16 @@ io.on(
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | TYPING
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     socket.on(
       "typing",
-      async (conversationId) => {
+      async (
+        conversationId
+      ) => {
         try {
           const id =
             Number(
@@ -784,7 +1617,9 @@ io.on(
             );
 
           if (
-            !Number.isInteger(id) ||
+            !Number.isInteger(
+              id
+            ) ||
             id <= 0
           ) {
             return;
@@ -810,7 +1645,7 @@ io.on(
               [
                 id,
                 user.id,
-                user.id
+                user.id,
               ]
             );
 
@@ -831,7 +1666,7 @@ io.on(
                   user.id,
 
                 full_name:
-                  user.full_name
+                  user.full_name,
               }
             );
         } catch (error) {
@@ -844,14 +1679,16 @@ io.on(
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | STOP TYPING
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     socket.on(
       "stop_typing",
-      async (conversationId) => {
+      async (
+        conversationId
+      ) => {
         try {
           const id =
             Number(
@@ -859,7 +1696,9 @@ io.on(
             );
 
           if (
-            !Number.isInteger(id) ||
+            !Number.isInteger(
+              id
+            ) ||
             id <= 0
           ) {
             return;
@@ -885,7 +1724,7 @@ io.on(
               [
                 id,
                 user.id,
-                user.id
+                user.id,
               ]
             );
 
@@ -903,7 +1742,7 @@ io.on(
               "user_stop_typing",
               {
                 user_id:
-                  user.id
+                  user.id,
               }
             );
         } catch (error) {
@@ -916,96 +1755,95 @@ io.on(
     );
 
     /*
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     | DISCONNECT
-    |--------------------------------------------------------------------------
+    |----------------------------------------------------------------------
     */
 
     socket.on(
       "disconnect",
-      async (reason) => {
+      async (
+        reason
+      ) => {
         console.log(
           `Socket disconnected: ${user.full_name} (${user.id}) - ${reason}`
         );
 
-        try {
-          /*
-          |--------------------------------------------------------------------
-          | IMPORTANT
-          |--------------------------------------------------------------------
-          | Check whether this user still has another active socket.
-          | This prevents multiple browser tabs from incorrectly changing
-          | the user to OFFLINE.
-          |--------------------------------------------------------------------
-          */
+        /*
+        |------------------------------------------------------------------
+        | Give another socket connection time to register.
+        |------------------------------------------------------------------
+        */
 
-          const userRoom =
-            io.sockets.adapter.rooms.get(
-              `user:${user.id}`
-            );
+        setTimeout(
+          async () => {
+            try {
+              const room =
+                io.sockets.adapter.rooms.get(
+                  `user:${user.id}`
+                );
 
-          const remainingConnections =
-            userRoom
-              ? userRoom.size
-              : 0;
+              const remainingConnections =
+                room
+                  ? room.size
+                  : 0;
 
-          /*
-          |--------------------------------------------------------------------
-          | ONLY MARK OFFLINE WHEN NO SOCKETS REMAIN
-          |--------------------------------------------------------------------
-          */
+              /*
+              |----------------------------------------------------------------
+              | If user has no other active connections,
+              | mark them offline.
+              |----------------------------------------------------------------
+              */
 
-          if (
-            remainingConnections === 0
-          ) {
-            await pool.query(
-              `
-              UPDATE users
+              if (
+                remainingConnections ===
+                0
+              ) {
+                await pool.query(
+                  `
+                  UPDATE users
 
-              SET
-                is_online = 0,
-                last_seen =
-                  CURRENT_TIMESTAMP
+                  SET
+                    is_online = 0,
+                    last_seen =
+                      CURRENT_TIMESTAMP
 
-              WHERE id = ?
-              `,
-              [user.id]
-            );
+                  WHERE id = ?
+                  `,
+                  [user.id]
+                );
 
-            console.log(
-              `User ${user.full_name} is now OFFLINE`
-            );
+                console.log(
+                  `User ${user.full_name} is now OFFLINE`
+                );
 
-            /*
-            |------------------------------------------------------------------
-            | BROADCAST OFFLINE STATUS
-            |------------------------------------------------------------------
-            */
+                io.emit(
+                  "user_status_changed",
+                  {
+                    user_id:
+                      user.id,
 
-            io.emit(
-              "user_status_changed",
-              {
-                user_id:
-                  user.id,
+                    is_online:
+                      false,
 
-                is_online:
-                  false,
-
-                last_seen:
-                  new Date()
+                    last_seen:
+                      new Date(),
+                  }
+                );
+              } else {
+                console.log(
+                  `User ${user.full_name} still has ${remainingConnections} active connection(s)`
+                );
               }
-            );
-          } else {
-            console.log(
-              `User ${user.full_name} still has ${remainingConnections} active connection(s)`
-            );
-          }
-        } catch (error) {
-          console.error(
-            "Unable to update offline status:",
-            error
-          );
-        }
+            } catch (error) {
+              console.error(
+                "Unable to update offline status:",
+                error
+              );
+            }
+          },
+          100
+        );
       }
     );
   }
@@ -1019,12 +1857,14 @@ io.on(
 
 app.use(
   (req, res) => {
-    res.status(404).json({
+    return res.status(404).json({
       ok: false,
+
       message:
         "API route not found",
+
       path:
-        req.originalUrl
+        req.originalUrl,
     });
   }
 );
@@ -1053,17 +1893,18 @@ app.use(
       return next(error);
     }
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
+
       message:
-        "Internal server error"
+        "Internal server error",
     });
   }
 );
 
 /*
 |--------------------------------------------------------------------------
-| SERVER ERROR HANDLING
+| HTTP SERVER ERROR
 |--------------------------------------------------------------------------
 */
 
@@ -1075,12 +1916,11 @@ httpServer.on(
       "EADDRINUSE"
     ) {
       console.error("");
+
       console.error(
         `ERROR: Port ${PORT} is already in use.`
       );
-      console.error(
-        `Close the other server using port ${PORT}, then run npm run dev again.`
-      );
+
       console.error("");
 
       process.exit(1);
@@ -1097,64 +1937,173 @@ httpServer.on(
 
 /*
 |--------------------------------------------------------------------------
+| GRACEFUL SHUTDOWN
+|--------------------------------------------------------------------------
+*/
+
+const shutdown = async (
+  signal
+) => {
+  console.log(
+    `\n${signal} received. Shutting down UC Chat server...`
+  );
+
+  try {
+    await closeDatabase();
+
+    httpServer.close(
+      () => {
+        console.log(
+          "HTTP server closed."
+        );
+
+        process.exit(0);
+      }
+    );
+  } catch (error) {
+    console.error(
+      "Shutdown error:",
+      error
+    );
+
+    process.exit(1);
+  }
+};
+
+process.on(
+  "SIGINT",
+  () => shutdown("SIGINT")
+);
+
+process.on(
+  "SIGTERM",
+  () => shutdown("SIGTERM")
+);
+
+/*
+|--------------------------------------------------------------------------
 | START SERVER
 |--------------------------------------------------------------------------
 */
 
-httpServer.listen(
-  PORT,
-  "0.0.0.0",
-  () => {
-    console.log("");
+const startServer =
+  async () => {
+    try {
+      /*
+      |----------------------------------------------------------------------
+      | Test database before accepting requests
+      |----------------------------------------------------------------------
+      */
 
-    console.log(
-      "========================================"
-    );
+      const databaseConnected =
+        await testDatabaseConnection();
 
-    console.log(
-      "          UC CHAT SERVER STARTED"
-    );
+      if (!databaseConnected) {
+        console.error("");
+        console.error(
+          "WARNING: UC Chat server is starting, but the database is not connected."
+        );
+        console.error(
+          "Please check your server/.env database settings."
+        );
+        console.error("");
+      }
 
-    console.log(
-      "========================================"
-    );
+      /*
+      |----------------------------------------------------------------------
+      | START HTTP + SOCKET SERVER
+      |----------------------------------------------------------------------
+      */
 
-    console.log(
-      `API:       http://localhost:${PORT}`
-    );
+      httpServer.listen(
+        PORT,
+        "0.0.0.0",
+        () => {
+          console.log("");
 
-    console.log(
-      `Health:    http://localhost:${PORT}/api/health`
-    );
+          console.log(
+            "========================================"
+          );
 
-    console.log(
-      `Client:    ${CLIENT_URL}`
-    );
+          console.log(
+            "          UC CHAT SERVER STARTED"
+          );
 
-    console.log(
-      `Socket.IO: port ${PORT}`
-    );
+          console.log(
+            "========================================"
+          );
 
-    console.log(
-      "Authentication: ENABLED"
-    );
+          console.log(
+            `API:       http://localhost:${PORT}`
+          );
 
-    console.log(
-      "Online status:  ENABLED"
-    );
+          console.log(
+            `Health:    http://localhost:${PORT}/api/health`
+          );
 
-    console.log(
-      "Last seen:      ENABLED"
-    );
+          console.log(
+            `Uploads:   ${SERVER_URL}/uploads/`
+          );
 
-    console.log(
-      "Typing status:  ENABLED"
-    );
+          console.log(
+            `Client:    ${CLIENT_URL}`
+          );
 
-    console.log(
-      "========================================"
-    );
+          console.log(
+            `Socket.IO: port ${PORT}`
+          );
 
-    console.log("");
-  }
-);
+          console.log(
+            "Authentication: ENABLED"
+          );
+
+          console.log(
+            "Online status:  ENABLED"
+          );
+
+          console.log(
+            "Last seen:      ENABLED"
+          );
+
+          console.log(
+            "Typing status:  ENABLED"
+          );
+
+          console.log(
+            "Text messages:  ENABLED"
+          );
+
+          console.log(
+            "Image messages: ENABLED"
+          );
+
+          console.log(
+            "File messages:  ENABLED"
+          );
+
+          console.log(
+            "File uploads:   ENABLED"
+          );
+
+          console.log(
+            "Max file size:  15MB"
+          );
+
+          console.log(
+            "========================================"
+          );
+
+          console.log("");
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Failed to start UC Chat server:",
+        error
+      );
+
+      process.exit(1);
+    }
+  };
+
+startServer();
